@@ -82,9 +82,10 @@ You can help users with the following Azure services:
 - Azure Managed Grafana: Monitoring dashboards
 - Azure Managed Lustre: High-performance filesystem operations
 
-**Architecture & Guidance:**
+**Architecture, Compliance & Guidance:**
 - Azure CLI Generate: Generate Azure CLI commands from natural language
 - Azure Best Practices: Get secure, production-grade guidance
+- Azure Quick Review CLI: Run compliance scans against Azure resources to identify misconfigurations, security risks, and deviations from Azure best practices. Use this tool when users ask about compliance posture, security audits, resource health checks, or want to validate their Azure environment against recommended standards.
 - Azure Terraform Best Practices: Infrastructure as code guidance
 - Bicep: Generate Azure resource templates
 - Cloud Architect: Guided architecture design
