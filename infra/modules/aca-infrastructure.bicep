@@ -100,14 +100,12 @@ var azureNamespaces = [
 // Build namespace args: flatten to ['--namespace', 'acr', '--namespace', 'advisor', ...]
 var namespaceArgs = flatten([for ns in azureNamespaces: ['--namespace', ns]])
 
-// Server args: expose all individual tools from working namespaces only
+// Server args: namespace mode (default, 1 tool per namespace = 44 tools, under Copilot Studio's 70-tool limit)
 var serverArgs = concat([
   '--transport'
   'http'
   '--outgoing-auth-strategy'
   'UseHostingEnvironmentIdentity'
-  '--mode'
-  'all'
 ], namespaceArgs)
 
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
