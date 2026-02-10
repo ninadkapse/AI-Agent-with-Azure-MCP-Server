@@ -80,3 +80,7 @@ node_modules/
 # Local History
 .history/
 .localhistory/
+
+# Connector deployment artifacts (contain environment-specific secrets)
+connector/.secret
+connector/
