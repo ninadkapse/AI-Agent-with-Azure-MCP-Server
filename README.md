@@ -109,13 +109,78 @@ ENTRA_APP_CLIENT_CLIENT_ID="<client_app_id>"
 ENTRA_APP_SERVER_CLIENT_ID="<server_app_id>"
 ```
 
-### 3. Add API Permission to Client App
+### 3. Configure Entra ID Permissions (Required)
 
-1. Go to **Azure Portal** → search for the client app registration using `ENTRA_APP_CLIENT_CLIENT_ID`
-2. Navigate to the **API permissions** blade
-3. Click **Add a permission**
-4. Select the server app registration in the **My APIs** tab
-5. Check the `Mcp.Tools.ReadWrite` scope and click **Add permissions**
+After deployment, you **must** configure API permissions on both the server and client app registrations. This enables the Azure MCP Server to call downstream Azure APIs on behalf of the signed-in user.
+
+#### Option A: Run the Setup Script (Recommended)
+
+The setup script automatically adds all required permissions and grants admin consent:
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\setup-permissions.ps1
+```
+
+**Linux/macOS (Bash):**
+```bash
+chmod +x ./scripts/setup-permissions.sh
+./scripts/setup-permissions.sh
+```
+
+The script will:
+1. Add `Mcp.Tools.ReadWrite` permission to the **client** app registration
+2. Add all downstream API permissions to the **server** app registration
+3. Grant admin consent for both apps
+4. Set the Identifier URI (`api://<server_client_id>`) on the server app
+
+#### Option B: Manual Configuration via Azure Portal
+
+If you prefer to configure manually, or if the script requires tenant admin privileges you don't have:
+
+**Client App Registration** (`ENTRA_APP_CLIENT_CLIENT_ID`):
+1. Azure Portal → App registrations → search for client app
+2. Go to **API permissions** → **Add a permission** → **My APIs** tab
+3. Select the server app registration
+4. Check `Mcp.Tools.ReadWrite` → click **Add permissions**
+5. Click **Grant admin consent** (requires admin role)
+
+**Server App Registration** (`ENTRA_APP_SERVER_CLIENT_ID`):
+1. Azure Portal → App registrations → search for server app
+2. Go to **API permissions** → **Add a permission** → **APIs my organization uses**
+3. Add each of the following downstream API permissions:
+
+| API Name | API App ID | Permission | Scope |
+|----------|-----------|------------|-------|
+| **Azure Resource Manager** | `797f4846-ba00-4fd7-ba43-dac1f8f63013` | `user_impersonation` | Required for most tools |
+| **Azure Storage** | `e406a681-f3d4-42a8-90b6-c2b029497af1` | `user_impersonation` | Storage operations |
+| **Azure Key Vault** | `cfa8b339-82a2-471a-a3c9-0fc0be7a4093` | `user_impersonation` | Secrets, keys, certs |
+| **Azure Data Explorer** | `2746ea77-4702-4b45-80ca-3c97e680e8b7` | `user_impersonation` | Kusto/KQL queries |
+| **Azure PostgreSQL/MySQL** | `123cd850-d9df-40bd-94d5-c9f07b7fa203` | `user_impersonation` | Database operations |
+| **Azure CLI Extension** | `a5ede409-60d3-4a6c-93e6-eb2e7271e8e3` | `Azclis.Intelligent.All` | CLI command generation |
+| **Azure App Configuration** | `35ffadb3-7fc1-497e-b61b-381d28e744cc` | `KeyValue.Read/Write/Delete, Snapshot.*` | App Config operations |
+| **Azure Event Hubs** | `80369ed6-5f11-4dd9-bef3-692475845e77` | `user_impersonation` | Event Hub operations |
+| **Azure Service Bus** | `80a10ef9-8168-493d-abf9-3297c4ef6e3c` | `user_impersonation` | Service Bus operations |
+| **Azure AI Search** | `880da380-985e-4198-81b9-e05b1cc53158` | `user_impersonation` | Search index operations |
+| **Azure Cognitive Services** | `7d312290-28c8-473c-a0ed-8e53749b6d6d` | `user_impersonation` | Speech services |
+
+4. Click **Grant admin consent for [your tenant]**
+
+> ⚠️ **Note:** Some APIs don't expose their permissions and cannot be configured here. These include: Application Insights Profiler, Azure Health Models, Cosmos DB, Container Registry, SignalR, Communication Services, and Confidential Ledger. These services use the managed identity credential directly instead of delegated permissions.
+
+**Server App — Expose an API:**
+1. Go to **Expose an API** blade
+2. Set **Application ID URI** to `api://<ENTRA_APP_SERVER_CLIENT_ID>`
+3. Verify the `Mcp.Tools.ReadWrite` scope is listed
+4. Under **Authorized client applications**, verify the client app is pre-authorized
+
+### 4. Verify Permissions in Azure Portal
+
+After running the script or manual setup, verify:
+
+- **Server App → API permissions**: Should show 11+ delegated permissions, all with "Granted" status
+- **Server App → Expose an API**: Should show `Mcp.Tools.ReadWrite` scope and the client as pre-authorized
+- **Client App → API permissions**: Should show `Mcp.Tools.ReadWrite` from the server app, with "Granted" status
 
 ---
 
@@ -333,6 +398,9 @@ After adding the custom connector, Copilot Studio will attempt to **list all too
 ```
 ├── azure.yaml                          # azd configuration
 ├── custom-connector-swagger-example.yaml # Swagger for Power Apps connector
+├── scripts/
+│   ├── setup-permissions.sh            # Bash: Entra ID permissions setup
+│   └── setup-permissions.ps1           # PowerShell: Entra ID permissions setup
 ├── infra/
 │   ├── bicepconfig.json               # Bicep extensions config
 │   ├── main.bicep                     # Main orchestration
@@ -342,7 +410,7 @@ After adding the custom connector, Copilot Studio will attempt to **list all too
 │       ├── aca-managed-identity.bicep  # User-assigned managed identity
 │       ├── aca-subscription-role.bicep # Contributor role assignment
 │       ├── application-insights.bicep  # App Insights (optional)
-│       └── entra-app.bicep            # Entra App registrations
+│       └── entra-app.bicep            # Entra App registrations + API permissions
 └── README.md
 ```
 

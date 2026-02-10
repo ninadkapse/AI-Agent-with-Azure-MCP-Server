@@ -25,7 +25,7 @@ module appInsights 'modules/application-insights.bicep' = {
   }
 }
 
-// Deploy Entra App (Client)
+// Deploy Entra App (Client) first — server needs its ID for pre-authorization
 var entraAppClientUniqueName = '${replace(toLower(entraAppClientDisplayName), ' ', '-')}-${uniqueString(resourceGroup().id)}'
 module entraAppClient 'modules/entra-app.bicep' = {
   name: 'entra-app-client-deployment'
@@ -36,7 +36,7 @@ module entraAppClient 'modules/entra-app.bicep' = {
   }
 }
 
-// Deploy Entra App (Server)
+// Deploy Entra App (Server) — with downstream API permissions and pre-authorized client
 var entraAppServerUniqueName = '${replace(toLower(entraAppServerDisplayName), ' ', '-')}-${uniqueString(resourceGroup().id)}'
 module entraAppServer 'modules/entra-app.bicep' = {
   name: 'entra-app-server-deployment'
