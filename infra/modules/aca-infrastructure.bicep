@@ -43,12 +43,16 @@ param userAssignedManagedIdentityId string = ''
 @description('Client ID of the user-assigned managed identity')
 param userAssignedManagedIdentityClientId string = ''
 
-// Server args: expose ALL Azure MCP tools (no namespace filtering, no read-only restriction)
+@description('Azure AD Client Secret for OBO flow (stored as Container App secret)')
+@secure()
+param azureAdClientSecret string = ''
+
+// Server args: expose ALL Azure MCP tools with On-Behalf-Of auth for full downstream API support
 var serverArgs = [
   '--transport'
   'http'
   '--outgoing-auth-strategy'
-  'UseHostingEnvironmentIdentity'
+  'UseOnBehalfOf'
   '--mode'
   'all'
 ]
@@ -77,6 +81,12 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: containerAppsEnvironment.id
     configuration: {
       activeRevisionsMode: 'Single'
+      secrets: !empty(azureAdClientSecret) ? [
+        {
+          name: 'server-client-secret'
+          value: azureAdClientSecret
+        }
+      ] : []
       ingress: {
         external: true
         targetPort: 8080
@@ -144,6 +154,14 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
                 value: 'Verbose'
               }
             ],
+            !empty(azureAdClientSecret)
+              ? [
+                  {
+                    name: 'AzureAd__ClientSecret'
+                    secretRef: 'server-client-secret'
+                  }
+                ]
+              : [],
             !empty(appInsightsConnectionString)
               ? [
                   {

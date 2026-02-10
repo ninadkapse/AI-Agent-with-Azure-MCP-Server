@@ -13,6 +13,10 @@ param entraAppClientDisplayName string
 @description('Application Insights connection string. Use "DISABLED" to disable telemetry, or provide existing connection string. If omitted, new App Insights will be created.')
 param appInsightsConnectionString string = ''
 
+@description('Client secret for the server Entra App (required for OBO auth flow)')
+@secure()
+param serverClientSecret string = ''
+
 // Deploy Application Insights if appInsightsConnectionString is empty and not DISABLED
 var appInsightsName = '${acaName}-insights'
 
@@ -73,6 +77,7 @@ module acaInfrastructure 'modules/aca-infrastructure.bicep' = {
     azureAdInstance: environment().authentication.loginEndpoint
     userAssignedManagedIdentityId: acaManagedIdentity.outputs.managedIdentityId
     userAssignedManagedIdentityClientId: acaManagedIdentity.outputs.managedIdentityClientId
+    azureAdClientSecret: serverClientSecret
   }
 }
 
