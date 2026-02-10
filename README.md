@@ -111,32 +111,56 @@ ENTRA_APP_SERVER_CLIENT_ID="<server_app_id>"
 
 ### 3. Add API Permission to Client App
 
-1. Go to **Azure Portal** → search for the client app using `ENTRA_APP_CLIENT_CLIENT_ID`
-2. Navigate to **API permissions** blade
-3. Click **Add a permission** → select the server app in **My APIs** tab
-4. Add the `Mcp.Tools.ReadWrite` scope
+1. Go to **Azure Portal** → search for the client app registration using `ENTRA_APP_CLIENT_CLIENT_ID`
+2. Navigate to the **API permissions** blade
+3. Click **Add a permission**
+4. Select the server app registration in the **My APIs** tab
+5. Check the `Mcp.Tools.ReadWrite` scope and click **Add permissions**
 
-### 4. Configure Custom Connector in Power Apps
+---
 
-Login to [Power Apps](https://make.powerapps.com) and create a custom connector:
+## Call Tools from Copilot Studio Agent
 
-#### General Tab
-- Set **Scheme** to `HTTPS`
-- Set **Host** to your `CONTAINER_APP_URL` value
+The Copilot Studio agent connects to the Azure MCP Server via a **Power Apps custom connector**. Follow these steps carefully:
 
-#### Swagger Editor
-Enter the swagger config (or import `custom-connector-swagger-example.yaml`):
+### Step 1: Create a Custom Connector in Power Apps
+
+1. Sign in to [Power Apps](https://make.powerapps.com)
+2. Select the environment to host the custom connector
+3. Go to **Custom connectors** → click **+ New custom connector** → **Create from blank**
+4. Give it a descriptive name (e.g., `Azure MCP Server`)
+
+> 📖 For more details, see [Create custom connector from scratch](https://learn.microsoft.com/connectors/custom-connectors/define-blank)
+
+### Step 2: General Tab
+
+| Setting | Value |
+|---------|-------|
+| **Name** | `Azure MCP Server` (or your preferred name) |
+| **Description** | `Connector to Azure MCP Server for all Azure operations` |
+| **Scheme** | `HTTPS` |
+| **Host** | Your `CONTAINER_APP_URL` value (e.g., `azure-mcp-server.<unique>.azurecontainerapps.io`) |
+
+### Step 3: Definition Tab (Swagger Editor)
+
+1. Skip the **Security** step for now — go directly to the **Definition** step
+2. Toggle the **Swagger editor** to enter editor view
+3. Paste the following swagger configuration (or import `custom-connector-swagger-example.yaml`):
 
 ```yaml
 swagger: '2.0'
 info:
   title: AzureMcpServer
-  description: Connector to Azure MCP Server for all Azure operations
+  description: >-
+    Connector to connect to a remote Azure MCP Server which exposes all Azure
+    operations and is authenticated by OAuth.
   version: '1.0'
 host: <your_container_app_url>
 basePath: /
 schemes:
   - https
+consumes: []
+produces: []
 paths:
   /:
     post:
@@ -146,42 +170,115 @@ paths:
         '200':
           description: Success
       operationId: McpToolExecute
+definitions: {}
+parameters: {}
+responses: {}
+securityDefinitions:
+  oauth2-auth:
+    type: oauth2
+    flow: accessCode
+    tokenUrl: https://login.windows.net/common/oauth2/authorize
+    scopes:
+      <server_app_registration_client_id>/.default: <server_app_registration_client_id>/.default
+    authorizationUrl: https://login.microsoftonline.com/common/oauth2/authorize
+security:
+  - oauth2-auth:
+      - <server_app_registration_client_id>/.default
+tags: []
 ```
 
-#### Security Tab
-| Setting | Value |
-|---------|-------|
-| Authentication type | `OAuth 2.0` |
-| Identity Provider | `Azure Active Directory` |
-| Client ID | `ENTRA_APP_CLIENT_CLIENT_ID` |
-| Secret options | `Use client secret` or `Use managed identity` |
-| Authorization URL | `https://login.microsoftonline.com` |
-| Tenant ID | `AZURE_TENANT_ID` |
-| Resource URL | `ENTRA_APP_SERVER_CLIENT_ID` |
-| Enable on-behalf-of login | `true` |
-| Scope | `<server_app_client_id>/.default` |
+> ⚠️ **Critical:** The `x-ms-agentic-protocol: mcp-streamable-1.0` property on the POST method is **required** for Copilot Studio to interact with the API using the MCP protocol.
 
-#### Create & Configure
-1. Click **Create connector**
-2. Copy the **Redirect URL** from the connector
-3. Go to Azure Portal → Client app registration → **Authentication** → Add the redirect URI
-4. If using managed identity: Create **Federated Credentials** in the client app
+Replace `<your_container_app_url>` with your `CONTAINER_APP_URL` value and `<server_app_registration_client_id>` with your `ENTRA_APP_SERVER_CLIENT_ID` value.
 
-#### Test Connection
-1. Edit the custom connector → go to **Test** tab
-2. Click **New connection** → sign in with your Azure account
+### Step 4: Security Tab
 
-### 5. Connect to Copilot Studio Agent
+Go back to the **Security** step and configure OAuth 2.0 authentication:
 
-1. Open [Copilot Studio](https://copilotstudio.microsoft.com)
-2. Create or select an Agent
-3. Navigate to the **Tools** tab
-4. Click **Add a tool** → search for your custom connector
-5. After adding, the agent should list all available Azure MCP tools
-6. Click **Test** and try prompts like:
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| **Authentication type** | `OAuth 2.0` | Required |
+| **Identity provider** | `Azure Active Directory` | Required |
+| **Client ID** | `ENTRA_APP_CLIENT_CLIENT_ID` from azd output | Client app registration ID |
+| **Secret option** | `Use client secret` OR `Use managed identity` | See setup notes below |
+| **Authorization URL** | `https://login.microsoftonline.com` | Default value |
+| **Tenant ID** | `AZURE_TENANT_ID` from azd output | Your Azure tenant ID |
+| **Resource URL** | `ENTRA_APP_SERVER_CLIENT_ID` from azd output | Server app registration client ID (not a URL) |
+| **Enable on-behalf-of login** | `Enabled` | Required |
+| **Scope** | `<ENTRA_APP_SERVER_CLIENT_ID>/.default` | Format: `{server_client_id}/.default` |
+
+**Secret option setup:**
+
+- **If using client secret:** Go to Azure Portal → Client app registration → **Certificates & secrets** → Create a new client secret. Copy the secret value and paste it into the Secret field.
+- **If using managed identity:** Proceed with the rest of the steps until the connector is created.
+
+> **Same-tenant requirement:** The client and server app registrations must be in the same tenant.
+
+### Step 5: Create Connector
+
+1. Click **Create connector** and wait for completion
+2. After creation, the UI provides a **Redirect URL** (and optionally a Managed Identity)
+
+### Step 6: Configure Redirect URI and Credentials
+
+1. Go to **Azure Portal** → search for the client app registration using `ENTRA_APP_CLIENT_CLIENT_ID`
+2. Navigate to **Authentication** → **Web** platform
+3. Click **Add URI** and paste the **Redirect URL** from the custom connector
+4. Click **Save**
+
+**If you chose "Use managed identity" as the secret option:**
+
+5. Go to **Certificates & secrets** → **Federated credentials** tab
+6. Click **+ Add credential**
+7. Select **Other issuer** as the Federated credential scenario
+8. Copy the **Issuer** and **Subject** values from the custom connector's Managed Identity details
+9. Paste them into the corresponding fields in the credential creation form
+10. Give it a descriptive name and description
+11. Click **Add**
+
+### Step 7: Test Connection
+
+1. Open the custom connector → click **Edit** → go to the **Test** step
+2. Select any operation
+3. Click **New connection**
+4. A sign-in window appears — sign in with the Azure account you plan to use
+5. You may see a consent dialog — approve the permissions
+6. If successful, the UI shows **"Connection created successfully"**
+
+> If you encounter errors, see the [Known Issues](#known-issues) section below.
+
+---
+
+## Connect Agent in Copilot Studio
+
+### Step 1: Open Copilot Studio
+
+1. Sign in to [Copilot Studio](https://copilotstudio.microsoft.com)
+2. Select the environment that has your custom connector
+3. Create a **new Agent** or open an existing one
+
+### Step 2: Add the MCP Tool
+
+1. Click on the agent to view its details
+2. Navigate to the **Tools** tab
+3. Click **Add a tool**
+4. Search for your custom connector name (e.g., `Azure MCP Server`)
+5. Select it to add it as a tool
+
+### Step 3: Verify Tool Discovery
+
+After adding the custom connector, Copilot Studio will attempt to **list all tools** from the Azure MCP Server. If everything is configured correctly, you should see the complete list of Azure MCP tools appear under the added connector.
+
+> Since this template exposes **all** Azure tools (42+ services), the tool list will be extensive — covering storage, compute, databases, networking, security, and more.
+
+### Step 4: Test the Agent
+
+1. Click the **Test** button to start a test playground session
+2. Try prompts that invoke Azure MCP tools:
 
 #### Example Prompts
 
+**Read Operations:**
 ```
 "List my Azure resource groups"
 "Show all virtual machines in my subscription"
@@ -197,8 +294,28 @@ paths:
 "List Redis Cache instances"
 "Show my Azure Functions apps"
 "List Service Bus namespaces"
-"Create a new resource group in East US"
+"Show me my Azure AI Search indexes"
+"List my PostgreSQL servers"
+"Show my Event Hubs namespaces"
+"List my Container Registry repositories"
+```
+
+**Write Operations:**
+```
+"Create a new resource group called 'demo-rg' in East US"
 "Create a storage account named 'mystorageacct' in West US"
+"Create a new secret 'api-key' with value 'xyz' in key vault 'my-vault'"
+"Set the App Configuration key 'feature-flag' to 'true'"
+"Create a new Event Hub in namespace 'my-namespace'"
+"Publish an event to Event Grid topic 'my-topic'"
+```
+
+**Architecture & Guidance:**
+```
+"Help me design an Azure architecture for a web application"
+"Generate Azure CLI commands to create a VM"
+"What are the best practices for Azure Key Vault?"
+"Help me deploy my application to Azure"
 ```
 
 ## What Gets Deployed
