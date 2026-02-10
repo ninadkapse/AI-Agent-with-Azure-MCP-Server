@@ -43,19 +43,72 @@ param userAssignedManagedIdentityId string = ''
 @description('Client ID of the user-assigned managed identity')
 param userAssignedManagedIdentityClientId string = ''
 
-@description('Azure AD Client Secret for OBO flow (stored as Container App secret)')
+@description('Azure AD Client Secret for OBO flow (stored as Container App secret, optional)')
 @secure()
 param azureAdClientSecret string = ''
 
-// Server args: expose ALL Azure MCP tools with On-Behalf-Of auth for full downstream API support
-var serverArgs = [
+// Namespaces to expose: all core Azure service namespaces.
+// Excludes 'extension' namespace (CLI Generate, Quick Review) which require
+// Microsoft 1st-party app tokens not available in remote hosting scenarios.
+var azureNamespaces = [
+  'acr'
+  'advisor'
+  'aks'
+  'appconfig'
+  'applens'
+  'applicationinsights'
+  'appservice'
+  'communication'
+  'compute'
+  'confidentialledger'
+  'cosmos'
+  'datadog'
+  'deploy'
+  'eventgrid'
+  'eventhubs'
+  'fileshares'
+  'foundry'
+  'functionapp'
+  'grafana'
+  'group'
+  'keyvault'
+  'kusto'
+  'loadtesting'
+  'managedlustre'
+  'marketplace'
+  'monitor'
+  'mysql'
+  'policy'
+  'postgres'
+  'pricing'
+  'quota'
+  'redis'
+  'resourcehealth'
+  'role'
+  'search'
+  'servicebus'
+  'signalr'
+  'speech'
+  'sql'
+  'storage'
+  'storagesync'
+  'subscription'
+  'virtualdesktop'
+  'workbooks'
+]
+
+// Build namespace args: flatten to ['--namespace', 'acr', '--namespace', 'advisor', ...]
+var namespaceArgs = flatten([for ns in azureNamespaces: ['--namespace', ns]])
+
+// Server args: expose all individual tools from working namespaces only
+var serverArgs = concat([
   '--transport'
   'http'
   '--outgoing-auth-strategy'
-  'UseOnBehalfOf'
+  'UseHostingEnvironmentIdentity'
   '--mode'
   'all'
-]
+], namespaceArgs)
 
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: environmentName
